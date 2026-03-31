@@ -14,11 +14,28 @@ This skill standardizes a safe Claude workflow:
 
 Important: On modern Mihomo cores, `relay` is removed. Use `dialer-proxy` chaining instead.
 
+## Required Reference
+
+Before applying this skill, read:
+
+- `skills/claude-ip-guard/references/clash-home-ip-setup-zh.md`
+
+Treat the "三项必检清单" in that file as mandatory release gates.
+
 ## When To Use
 
 - Claude/Anthropic login verification loops or frequent risk checks.
 - Egress IP changes after sleep, network switches, or node switches.
 - Need a one-click safe launch gate.
+
+## Workflow
+
+1. Read required reference and confirm the three mandatory checks.
+2. Apply Clash chain config (Mihomo-compatible `dialer-proxy`).
+3. Enforce runtime requirements (`rule` mode, TUN on, IPv6 off).
+4. Run verification gate in clean terminal.
+5. Enable safe launch guard (`openclaude`) and optional app button.
+6. Operate with no in-session node switching while Claude is open.
 
 ## One-Time Setup
 
@@ -65,6 +82,12 @@ prepend-rules:
 - Remove shell `HTTP_PROXY/HTTPS_PROXY` env exports when using TUN
 
 ## Verification Gate (Must Pass)
+
+Must pass all 3 checks from the reference file:
+
+1. Subscription auto-update is disabled.
+2. `Claude-Tunnel` contains real and reachable first-hop nodes.
+3. Terminal bare `curl` shows expected residential IP.
 
 Run in a clean terminal:
 
@@ -139,7 +162,9 @@ end run
 - Before publishing, run a quick secret/PII scan:
 
 ```bash
-rg -n "(api[_-]?key|token|password|secret|@|([0-9]{1,3}\\.){3}[0-9]{1,3})" skills/claude-ip-guard/SKILL.md
+rg -n "(api[_-]?key|token|password|secret|@|([0-9]{1,3}\\.){3}[0-9]{1,3})" \
+  skills/claude-ip-guard/SKILL.md \
+  skills/claude-ip-guard/references/clash-home-ip-setup-zh.md
 ```
 
 ## Fast Recovery
