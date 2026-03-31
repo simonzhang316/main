@@ -73,7 +73,7 @@ curl -s ifconfig.me && echo
 curl -s ping0.cc/ip && echo
 ```
 
-Both must return the same fixed residential IP (for example `38.45.149.73`).
+Both must return the same fixed residential IP (for example `<EXPECTED_RESIDENTIAL_IP>`).
 
 Optional deep check (Clash unix socket):
 
@@ -88,8 +88,9 @@ Add to `~/.zshrc`:
 
 ```bash
 openclaude() {
-  local expected_ip="${CLAUDE_EXPECTED_IP:-38.45.149.73}"
+  local expected_ip="${CLAUDE_EXPECTED_IP:-}"
   local current_ip
+  [[ -z "$expected_ip" ]] && echo "Set CLAUDE_EXPECTED_IP first. Claude not opened." && return 1
   current_ip="$(curl -4 -s --max-time 8 ifconfig.me | tr -d '\r\n')"
   echo "Current IP: ${current_ip:-<empty>}"
 
@@ -104,6 +105,7 @@ openclaude() {
 Usage:
 
 ```bash
+export CLAUDE_EXPECTED_IP="<EXPECTED_RESIDENTIAL_IP>"
 openclaude
 ```
 
@@ -113,7 +115,7 @@ Create `Open Claude Safe.app` with AppleScript:
 
 ```applescript
 on run
-    set expectedIP to "38.45.149.73"
+    set expectedIP to "<EXPECTED_RESIDENTIAL_IP>"
     set currentIP to do shell script "/usr/bin/curl -4 -s --max-time 8 ifconfig.me | /usr/bin/tr -d '\\r\\n'"
     if currentIP is not expectedIP then
         display alert "Claude Guard" message "IP mismatch: " & currentIP & " (expected " & expectedIP & ")" as warning
@@ -129,9 +131,20 @@ end run
 - If network changes (sleep wake, Wi-Fi switch, Clash restart), close Claude, re-check IP, then reopen.
 - Before every Claude launch, pass the verification gate first.
 
+## Security Hygiene
+
+- Do not hardcode personal IPs, usernames, passwords, or tokens in this skill.
+- Keep `CLAUDE_EXPECTED_IP` in local shell env only, not in git-tracked files.
+- Keep proxy credentials as placeholders in docs (`xxx`), real values only in local config.
+- Before publishing, run a quick secret/PII scan:
+
+```bash
+rg -n "(api[_-]?key|token|password|secret|@|([0-9]{1,3}\\.){3}[0-9]{1,3})" skills/claude-ip-guard/SKILL.md
+```
+
 ## Fast Recovery
 
-If IP suddenly becomes non-residential (for example `112.*`):
+If IP suddenly becomes unexpected:
 
 1. Quit Claude completely.
 2. Ensure Clash mode is `rule`, TUN on, IPv6 off.
