@@ -176,3 +176,23 @@ If IP suddenly becomes unexpected:
 3. Re-select `Claude-Tunnel` to a working SG/AU node.
 4. Re-run the two `curl` checks.
 5. Reopen Claude only after IP matches expected value.
+
+## Auto Rollback Heal Script
+
+When subscription refresh or profile merge causes IP drift, run:
+
+```bash
+claude-ip-heal <EXPECTED_IP> <EXPECTED_PORT>
+```
+
+What it does:
+
+- Scans Clash Verge config/profile YAML files.
+- Forces `Claude-Residential` endpoint back to your target static IP+port.
+- Removes `dialer-proxy: Claude-Tunnel` under `Claude-Residential` (drift-prone in this setup).
+- Reloads Mihomo via unix socket.
+- Verifies both `ifconfig.me` and `ping0.cc/ip` match expected static IP.
+
+Script source in this skill:
+
+- `skills/claude-ip-guard/scripts/claude-ip-heal.sh`
