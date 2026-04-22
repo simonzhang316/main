@@ -19,6 +19,7 @@ Important: On modern Mihomo cores, `relay` is removed. Use `dialer-proxy` chaini
 Before applying this skill, read:
 
 - `skills/claude-ip-guard/references/clash-home-ip-setup-zh.md`
+- `skills/claude-ip-guard/references/claude-ip-ops-runbook-zh.md`
 
 Treat the "三项必检清单" in that file as mandatory release gates.
 
