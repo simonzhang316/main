@@ -56,10 +56,10 @@ curl -4 -s ifconfig.me/all.json | rg -o '([0-9]{1,3}\.){3}[0-9]{1,3}' -m 1 && ec
 
 ```bash
 # 启动（目标 IP 可按需替换）
-/Users/zhangxinran/Scratch/clash-verge/ip-monitor/start_ip_monitor.sh <EXPECTED_IP>
+/Users/zhangxinran/Projects/clash-verge/ip-monitor/start_ip_monitor.sh <EXPECTED_IP>
 
 # 停止
-/Users/zhangxinran/Scratch/clash-verge/ip-monitor/stop_ip_monitor.sh
+/Users/zhangxinran/Projects/clash-verge/ip-monitor/stop_ip_monitor.sh
 ```
 
 默认访问地址：`http://127.0.0.1:8765`。

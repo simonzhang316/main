@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Claude IP Monitor</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --line: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --ok: #2ea043;
+      --warn: #d29922;
+      --bad: #f85149;
+      --btn: #1f6feb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(900px 400px at 20% -20%, #1f2937 0%, #0d1117 65%);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; }
+    .title { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+    .subtitle { color: var(--muted); margin-bottom: 18px; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    input, button {
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      background: #0f141b;
+      color: var(--text);
+      font-size: 14px;
+    }
+    input { min-width: 220px; }
+    button {
+      background: var(--btn);
+      border-color: transparent;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.secondary { background: #232b36; border-color: var(--line); }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .pass { background: rgba(46,160,67,0.16); color: #7ee787; }
+    .warn { background: rgba(210,153,34,0.16); color: #f2cc60; }
+    .fail { background: rgba(248,81,73,0.16); color: #ffaba8; }
+    .kv { display: grid; grid-template-columns: 120px 1fr; gap: 6px; margin-top: 6px; }
+    .k { color: var(--muted); }
+    .providers { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+    .provider { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #0f141b; }
+    .provider .name { font-weight: 700; margin-bottom: 6px; }
+    .provider .ip { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .alertbox {
+      border-radius: 12px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      background: #121922;
+    }
+    .alertbox h3 { margin: 0 0 8px 0; font-size: 18px; }
+    .alert-high { border-color: rgba(248,81,73,.5); background: rgba(248,81,73,.12); }
+    .alert-medium { border-color: rgba(210,153,34,.5); background: rgba(210,153,34,.12); }
+    .alert-low { border-color: rgba(46,160,67,.5); background: rgba(46,160,67,.12); }
+    .alert-actions { margin: 0; padding-left: 18px; color: var(--text); }
+    .alert-actions li { margin: 6px 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="title">Claude IP 监控页</div>
+    <div class="subtitle">自动刷新检测，不依赖 ping0.cc</div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="row">
+          <label>目标 IP：<input id="expectedIp" placeholder="例如 1.2.3.4" /></label>
+          <label>刷新间隔(秒)：<input id="intervalSec" type="number" min="3" max="300" value="5" style="width:110px" /></label>
+          <button id="saveBtn" class="secondary">保存设置</button>
+          <button id="refreshBtn">立即刷新</button>
+          <button id="toggleBtn" class="secondary">暂停自动刷新</button>
+        </div>
+      </div>
+
+      <div id="dangerBox" class="alertbox alert-medium">
+        <h3 id="dangerTitle">风险提示：等待检测</h3>
+        <ul id="dangerActions" class="alert-actions">
+          <li>等待首次检测结果</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div id="statusPill" class="pill warn">等待检测...</div>
+        <div id="statusMsg" style="margin-top:8px;"></div>
+        <div class="kv">
+          <div class="k">当前IP</div><div id="consensus" class="mono">-</div>
+          <div class="k">目标IP</div><div id="expected" class="mono">-</div>
+          <div class="k">一致票数</div><div id="confidence">-</div>
+          <div class="k">更新时间</div><div id="updatedAt">-</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:700; margin-bottom: 8px;">数据源状态</div>
+        <div id="providers" class="providers"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const expectedIpEl = document.getElementById("expectedIp");
+    const intervalSecEl = document.getElementById("intervalSec");
+    const saveBtn = document.getElementById("saveBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const toggleBtn = document.getElementById("toggleBtn");
+
+    const statusPill = document.getElementById("statusPill");
+    const statusMsg = document.getElementById("statusMsg");
+    const consensusEl = document.getElementById("consensus");
+    const expectedEl = document.getElementById("expected");
+    const confidenceEl = document.getElementById("confidence");
+    const updatedAtEl = document.getElementById("updatedAt");
+    const providersEl = document.getElementById("providers");
+    const dangerBox = document.getElementById("dangerBox");
+    const dangerTitle = document.getElementById("dangerTitle");
+    const dangerActions = document.getElementById("dangerActions");
+
+    let timer = null;
+    let running = true;
+    let lastSuccessData = null;
+
+    function loadSettings() {
+      expectedIpEl.value = localStorage.getItem("ip_monitor_expected") || "";
+      intervalSecEl.value = localStorage.getItem("ip_monitor_interval") || "5";
+    }
+
+    function saveSettings() {
+      localStorage.setItem("ip_monitor_expected", expectedIpEl.value.trim());
+      localStorage.setItem("ip_monitor_interval", String(Math.max(3, Number(intervalSecEl.value) || 5)));
+      restartTimer();
+    }
+
+    function setPill(kind, text) {
+      statusPill.className = `pill ${kind}`;
+      statusPill.textContent = text;
+    }
+
+    function renderProviders(probes) {
+      providersEl.innerHTML = "";
+      probes.forEach(p => {
+        const div = document.createElement("div");
+        div.className = "provider";
+        const ok = p.ok ? "pass" : "fail";
+        const latency = p.latency_ms == null ? "-" : `${p.latency_ms} ms`;
+        div.innerHTML = `
+          <div class="name">${p.name}</div>
+          <div class="ip mono">${p.ip || "-"}</div>
+          <div style="margin-top:6px; color:${p.ok ? "#7ee787" : "#ffaba8"}">${p.ok ? "OK" : (p.error || "ERROR")}</div>
+          <div style="margin-top:4px; color:#8b949e">延迟: ${latency}</div>
+          <div style="margin-top:4px; color:#8b949e">${p.url}</div>
+        `;
+        providersEl.appendChild(div);
+      });
+    }
+
+    function renderRisk(data) {
+      const level = data.risk_level || "medium";
+      dangerBox.className = `alertbox alert-${level}`;
+      if (level === "high") {
+        dangerTitle.textContent = "危险：当前IP存在风险，请先处理再登录 Claude";
+      } else if (level === "medium") {
+        dangerTitle.textContent = "警告：状态不完整，请先确认再继续";
+      } else {
+        dangerTitle.textContent = "安全：当前IP与目标一致";
+      }
+
+      const actions = Array.isArray(data.actions) && data.actions.length
+        ? data.actions
+        : ["无附加建议"];
+      dangerActions.innerHTML = "";
+      actions.forEach((a) => {
+        const li = document.createElement("li");
+        li.textContent = a;
+        dangerActions.appendChild(li);
+      });
+    }
+
+    async function refreshStatus() {
+      const expected = expectedIpEl.value.trim();
+      const url = `/api/status?expected=${encodeURIComponent(expected)}`;
+      try {
+        const resp = await fetch(url, { cache: "no-store" });
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}`);
+        }
+        const data = await resp.json();
+        lastSuccessData = data;
+
+        const map = { pass: ["pass", "状态正常"], warn: ["warn", "状态警告"], fail: ["fail", "状态异常"] };
+        const [cls, text] = map[data.overall] || ["warn", "未知状态"];
+
+        setPill(cls, text);
+        statusMsg.textContent = data.message;
+        consensusEl.textContent = data.consensus_ip || "-";
+        expectedEl.textContent = data.expected_ip || "(未设置)";
+        confidenceEl.textContent = `${data.confidence || 0} / ${data.total_count || 0}`;
+        updatedAtEl.textContent = data.timestamp || "-";
+        renderProviders(data.probes || []);
+        renderRisk(data);
+      } catch (err) {
+        if (lastSuccessData) {
+          setPill("warn", "连接异常");
+          statusMsg.textContent = `后端请求失败，当前展示为上次成功结果。错误: ${String(err)}`;
+          consensusEl.textContent = lastSuccessData.consensus_ip || "-";
+          expectedEl.textContent = lastSuccessData.expected_ip || "(未设置)";
+          confidenceEl.textContent = `${lastSuccessData.confidence || 0} / ${lastSuccessData.total_count || 0}`;
+          updatedAtEl.textContent = `${lastSuccessData.timestamp || "-"} (缓存)`;
+          renderProviders(lastSuccessData.probes || []);
+          renderRisk({
+            risk_level: "medium",
+            actions: [
+              "后端连接异常，当前为缓存结果",
+              "如持续超过 30 秒，请执行 start_ip_monitor.sh 重启监控页",
+              "缓存期间避免进行敏感登录操作",
+            ],
+          });
+        } else {
+          setPill("fail", "请求失败");
+          statusMsg.textContent = String(err);
+          consensusEl.textContent = "-";
+          confidenceEl.textContent = "-";
+          updatedAtEl.textContent = "-";
+          renderProviders([]);
+          renderRisk({
+            risk_level: "high",
+            actions: [
+              "监控后端请求失败，状态不可信",
+              "执行 start_ip_monitor.sh 重新启动监控页后再检查",
+              "在恢复正常前，不要登录 Claude",
+            ],
+          });
+        }
+      }
+    }
+
+    function restartTimer() {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      if (!running) return;
+      const sec = Math.max(3, Number(intervalSecEl.value) || 5);
+      timer = setInterval(refreshStatus, sec * 1000);
+    }
+
+    saveBtn.addEventListener("click", () => {
+      saveSettings();
+      refreshStatus();
+    });
+
+    refreshBtn.addEventListener("click", refreshStatus);
+
+    toggleBtn.addEventListener("click", () => {
+      running = !running;
+      toggleBtn.textContent = running ? "暂停自动刷新" : "恢复自动刷新";
+      restartTimer();
+    });
+
+    loadSettings();
+    refreshStatus();
+    restartTimer();
+  </script>
+</body>
+</html>
